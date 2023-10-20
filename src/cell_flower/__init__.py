@@ -1,0 +1,3 @@
+"""
+Cell detection module
+"""

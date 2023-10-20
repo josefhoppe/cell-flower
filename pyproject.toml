@@ -1,0 +1,27 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "cell_flower"
+version = "0.0.1"
+authors = [
+  { name="Josef Hoppe", email="hoppe@cs.rwth-aachen.de" },
+]
+description = "Cell FLOWer processes edge flows using cell complexes. See homepage or https://arxiv.org/abs/2309.01632."
+readme = "README.md"
+requires-python = ">=3.7"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+dependencies = [
+  'scikit-learn >= 1.2.0',
+  'numpy >= 1.20.0',
+  'scipy >= 1.10.0'
+]
+
+[project.urls]
+"Homepage" = "https://github.com/josefhoppe/cell-flower"
+"Bug Tracker" = "https://github.com/josefhoppe/cell-flower/issues"
