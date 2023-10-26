@@ -4,11 +4,8 @@
 
 [![arXiv:2309.01632](https://img.shields.io/badge/arXiv-2309.01632-b31b1b.svg?logo=arxiv)](https://arxiv.org/abs/2309.01632)
 [![MIT license](https://img.shields.io/badge/License-MIT-blue.svg)](https://github.com/josefhoppe/cell-flower/blob/main/LICENSE)
-
-![Python version](https://img.shields.io/python/required-version-toml?tomlFilePath=https%3A%2F%2Fraw.githubusercontent.com%2Fjosefhoppe%2Fcell-flower%2Fmain%2Fpyproject.toml
-)
-![Package version on PyPI](https://img.shields.io/pypi/v/cell-flower
-)
+![Python version](https://img.shields.io/python/required-version-toml?tomlFilePath=https%3A%2F%2Fraw.githubusercontent.com%2Fjosefhoppe%2Fcell-flower%2Fmain%2Fpyproject.toml&logo=python&logoColor=white)
+[![Package version on PyPI](https://img.shields.io/pypi/v/cell-flower)](https://pypi.org/project/cell-flower/)
 
 Cell FLOWer processes edge flows using cell complexes.
 It was developed for the paper [*Representing Edge Flows on Graphs via Sparse Cell Complexes*](https://arxiv.org/abs/2309.01632).

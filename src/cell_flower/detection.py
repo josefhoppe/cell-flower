@@ -75,21 +75,21 @@ def get_induced_cycle(edge: Tuple[int, int], st: FlowPotentialSpanningTree) -> t
     left.append(a)
     return normalize_cell(tuple(left + right[::-1]))
 
-class CellSearchMethod(Enum):
+class CellCandidateHeuristic(Enum):
     """
     Methods to find potential cells in cell complexes.
     DFS: depth-first-search to construct a spanning tree, choosing the cell 
          with most circle flow from all cycles induced by adding a single edge to the spanning tree.
     BFS: breadth-first-search (see DFS for details)
     MAX: maximum spanning tree (by `sum(abs(edge_flows))`)
-    CLUSTER: cluster by harmonic flow values, then build spanning tree with edges that have maximum similarity to 
+    SIMILARITY: cluster by harmonic flow values, then build spanning tree with edges that have maximum similarity to each cluster center
     TRIANGLES: consider all triangles
     GROUND_TRUTH: consider all true cells
     """
     DFS = 1
     BFS = 2
     MAX = 3
-    CLUSTER = 4
+    SIMILARITY = 4
     TRIANGLES = 5
 
 
@@ -162,9 +162,8 @@ def __finalize_candidates(cell_compl: CellComplex, heap: list[tuple[float, FlowP
     
     return result
 
-def cell_candidate_search_st(rnd: np.random.Generator, cell_compl: CellComplex, result_count: int, flows: np.ndarray, method: CellSearchMethod = CellSearchMethod.DFS,
-                            max_len=np.inf, n_clusters = 11,
-                             flow_norm: CellSearchFlowNormalization = CellSearchFlowNormalization.NONE, random_seed : int | None = None) -> List[Tuple[tuple, csc_array, FlowPotentialSpanningTree]]:
+def cell_candidate_search_st(rnd: np.random.Generator, cell_compl: CellComplex, result_count: int, flows: np.ndarray, method: CellCandidateHeuristic = CellCandidateHeuristic.SIMILARITY,
+                            n_clusters = 11, flow_norm: CellSearchFlowNormalization = CellSearchFlowNormalization.NONE) -> List[Tuple[tuple, csc_array, FlowPotentialSpanningTree]]:
     """
     Searches for Cell candidates using spanning trees.
     The concrete implementation depends on `method`:
@@ -174,14 +173,14 @@ def cell_candidate_search_st(rnd: np.random.Generator, cell_compl: CellComplex, 
     see `cell_candidate_search_rnd_st` and `cell_candidate_search_max_st` respectively for more info.
     """
     max_cycle_heap = []
-    if method == CellSearchMethod.MAX:
+    if method == CellCandidateHeuristic.MAX:
         spanning_tree, edges = max_spanning_tree(cell_compl, flows)
 
         max_cycle_heap = find_max_cycles(cell_compl, spanning_tree, flows, edges, flow_norm)
-    elif method == CellSearchMethod.CLUSTER:
+    elif method == CellCandidateHeuristic.SIMILARITY:
         # since the orientation of edges is arbitrary, we need to cluster both with and opposite the orientation
         embed = np.concatenate((flows, -flows), axis=1).T
-        kmeans = KMeans(n_clusters=n_clusters, n_init='auto', random_state=random_seed).fit(embed)
+        kmeans = KMeans(n_clusters=n_clusters, n_init='auto', random_state=rnd.integers(4294967295)).fit(embed)
         dist_center_edges_pos = pairwise_distances(kmeans.cluster_centers_, flows.T)
         dist_center_edges_neg = pairwise_distances(kmeans.cluster_centers_, -flows.T)
         dist_center_edges = np.minimum(dist_center_edges_pos, dist_center_edges_neg)
@@ -196,10 +195,108 @@ def cell_candidate_search_st(rnd: np.random.Generator, cell_compl: CellComplex, 
 
         for _ in range(result_count):
             root_node = rnd.choice(nodes)
-            if method == CellSearchMethod.BFS:
+            if method == CellCandidateHeuristic.BFS:
                 spanning_tree, edges = bfs_spanning_tree(rnd, incidences, edge_count, root_node, flows)
-            else: # CellSearchMethod.DFS
+            else: # CellCandidateHeuristic.DFS
                 spanning_tree, edges = dfs_spanning_tree(rnd, incidences, edge_count, root_node, flows)
 
             find_max_cycles(cell_compl, spanning_tree, flows, edges, flow_norm, max_cycle_heap)
     return __finalize_candidates(cell_compl, max_cycle_heap, result_count)
+
+def cell_candidate_search_triangles(cell_compl: CellComplex, result_count: int, flows: np.ndarray) -> List[Tuple[tuple, csc_array, FlowPotentialSpanningTree]]:
+    """
+    Returns the most significant triangles according to the flow around their edges.
+    """
+    cand_list = [(np.sum(np.abs(boundary.T @ flows.T)), cell, boundary) for cell, boundary in cell_compl.triangles]
+    cand_list.sort(key=lambda x: x[0], reverse=True)
+    return [(cell, boundary) for _, cell, boundary in cand_list[:result_count]]
+
+def cell_inference_approximation(CC: CellComplex, flows: np.ndarray, n_candidates: int,
+                                 n: int | None = None, epsilon: float | None = None, heuristic: CellCandidateHeuristic = CellCandidateHeuristic.SIMILARITY,
+                                 n_clusters: int = 11, flow_norm = CellSearchFlowNormalization.LEN,
+                                 seed: np.random.Generator | int | None = None) -> CellComplex:
+    """
+    Runs the inference and approximation algorithm from [1] and returns both the inferred flows and the resulting CellComplex.
+
+    Parameters:
+
+    - `CC`: The CellComplex to start from
+    - `flows`: numpy array of shape (flow samples, edges). The edges dimension needs to be ordered corresponding to `CC.get_cells(1)`.
+    - `n_candidates`: The number of cell candidates to consider in each step.
+    - `n`: Number of cells to add. Optional, see for termination condition below.
+    - `epsilon`: Approximation error to reach before stopping. Optional, see for termination condition below.
+    - `heuristic`: The cell inference heuristic. Optional, default: `CellCandidateHeuristic.SIMILARITY`
+    - `n_clusters`: Number of clusters for `heuristic=CellCandidateHeuristic.SIMILARITY`. Otherwise ignored. Intuitively, it can be t to 1 + 2 * (Number of cells to distinguish in each step) Optional, default: `11`.
+    - `flow_norm`: How to normalize cell flows for comparison. See CellSearchFlowNormalization. Optional, default `CellSearchFlowNormalization.LEN`.
+    - `seed`: Seed for reproducible Randomness. Can be a `np.random.Generator`, `int` (used to seed a Generator). Optional, `np.random.default_rng()` if not provided.
+
+    Returns: The cell complex obtained by adding the mentioned cells.
+
+    Terminates on either of these conditions:
+
+    - the number of added cells is `n`
+    - the approximation error is at most `epsilon`
+    - the best cell candidate does not result in a lower approximation error than previously (with warning)
+
+    Recommended usage:
+
+    - Only provide `n` to add a certain number of cells
+    - If you want to reach a certain `epsilon`, you may want to provide a very large `n` to ensure it still terminates.
+    - It is possible, but not recommended, to provide neither. In this case, the algorithm will only terminate once it fails to add another cell that is linearly independent from previous cells. Not considering flaws in the heuristic or numeric computation, this results in adding a complete cycle basis.
+
+    [1]: Josef Hoppe and Michael T. Schaub: Representing Edge Flows on Graphs via Sparse Cell Complexes. In: arXiv pre-prints, 2023. https://arxiv.org/abs/2309.01632
+    """
+    if seed is None:
+        rnd = np.random.default_rng()
+    elif type(seed) is np.random.Generator:
+        rnd = seed
+    else:
+        rnd = np.random.default_rng(seed)
+
+    if n is None and epsilon is None:
+        print("[WARN] running cell detection without explicit termination condition.")
+    
+    current_compl = CC
+    no_gradient_flows = np.copy(flows)
+    for i in range(flows.shape[0]):
+        no_gradient_flows[i] -= project_flow(
+            current_compl.boundary_map(1).T, flows[[i]])
+    
+    harmonic_flows = np.copy(no_gradient_flows)
+    for j in range(harmonic_flows.shape[0]):
+        harmonic_flows[j] -= project_flow(
+            current_compl.boundary_map(2), no_gradient_flows[[j]])
+
+    cells_added = 0
+    approx_error = np.sqrt(np.sum(np.square(harmonic_flows)))
+
+    while (n is None or cells_added < n) and (epsilon is None or approx_error > epsilon):
+        if heuristic == CellCandidateHeuristic.TRIANGLES:
+            candidate_cells = cell_candidate_search_triangles(current_compl, n_candidates, harmonic_flows)
+        else:
+            candidate_cells = cell_candidate_search_st(rnd, current_compl, n_candidates, harmonic_flows,
+                                                       heuristic, n_clusters, flow_norm)
+
+        score_vals, score_cells = score_cells_multiple(
+            current_compl, no_gradient_flows, [cell[:2] for cell in candidate_cells])
+        scores = np.sum(score_vals, axis=1)
+        next_cell = score_cells[np.argmin(scores)]
+        
+        cell_boundaries = { cell[0]: cell[1] for cell in candidate_cells}
+
+        if next_cell == ():
+            print(
+                f'[WARN] detected empty cell after {cells_added} cells (error: {approx_error:.2G})')
+            return current_compl
+
+        current_compl = current_compl.add_cell_fast(next_cell, cell_boundaries[next_cell])
+
+        harmonic_flows = np.copy(no_gradient_flows)
+        for j in range(harmonic_flows.shape[0]):
+            harmonic_flows[j] -= project_flow(
+                current_compl.boundary_map(2), no_gradient_flows[[j]])
+        
+        approx_error = np.sum(np.square(harmonic_flows))
+        cells_added += 1
+
+    return current_compl
