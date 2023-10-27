@@ -22,9 +22,26 @@ dependencies = [
   'scipy >= 1.10.0'
 ]
 
+[project.optional-dependencies]
+test = [
+  'pandas',
+  'pytest-cov'
+]
+
 [project.urls]
 "Homepage" = "https://github.com/josefhoppe/cell-flower"
 "Bug Tracker" = "https://github.com/josefhoppe/cell-flower/issues"
 
 [tool.hatch.build]
 exclude = ["examples", "readme_src"]
+
+[tool.pytest.ini_options]
+addopts = "-ra --cov --cov-report html --cov-report term-missing --cov-fail-under 75"
+testpaths = [
+    "tests",
+    "tests/cell_flower"
+]
+pythonpath = ["src"]
+
+[tool.coverage.run]
+source = ["src"]
