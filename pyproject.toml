@@ -25,7 +25,8 @@ dependencies = [
 [project.optional-dependencies]
 test = [
   'pandas',
-  'pytest-cov'
+  'pytest-cov',
+  'networkx'
 ]
 
 [project.urls]

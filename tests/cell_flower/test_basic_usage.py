@@ -1,6 +1,7 @@
 import cell_flower as cf
 import pandas as pd
 import numpy as np
+import networkx as nx
 
 def test_basic_run():
     # Initialize underlying graph
@@ -33,3 +34,9 @@ def test_basic_run():
     # Check to see the cells are correct
     assert (0,1,2,3) in CC_prime.get_cells(2)
     assert (0,3,4) in CC_prime.get_cells(2)
+
+def test_nx_compatibility():
+    G = nx.karate_club_graph()
+    CC = cf.nx_graph_to_cc(G)
+    G2 = cf.cc_to_nx_graph(CC)
+    assert nx.is_isomorphic(G, G2)

@@ -242,3 +242,23 @@ class CellComplex():
             res[a].add((b, idx))
             res[b].add((a, idx + edge_count))
         return res
+    
+def cc_to_nx_graph(CC: CellComplex):
+    """
+    Converts the 1-skeleton of the given CC to the networkx.Graph format.
+
+    Requires networkx to be on the path.
+    """
+    import networkx as nx
+    G = nx.Graph()
+    # add separately to ensure correct order
+    G.add_nodes_from([c[0] for c in CC.get_cells(0)])
+    G.add_edges_from(CC.get_cells(1))
+    return G
+
+def nx_graph_to_cc(G) -> CellComplex:
+    """
+    Converts the networkx Graph to a Cell Complex
+    """
+    cells = [(node, ) for node in G.nodes] + [e for e in G.edges]
+    return CellComplex(cells)

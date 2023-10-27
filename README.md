@@ -21,9 +21,11 @@ How to use it (Also check out the complete [examples](https://github.com/josefho
 
 ```python
 import cell_flower as cf
+import networkx as nx
 
-CC = cf.CellComplex([(0,1), (1,2), (2,3), (0,3), (3,4), (0,4)])
-flows = ...
+G = ... # nx.Graph
+CC = cf.nx_graph_to_cc(G)
+flows = ... # np.ndarray, shape (samples, edges)
 
 CC_prime = cf.cell_inference_approximation(CC, flows, 2, 2, n_clusters=5)
 # Check to see the cells that were recovered
