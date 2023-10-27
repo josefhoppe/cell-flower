@@ -9,7 +9,7 @@
 
 Cell FLOWer processes edge flows using cell complexes.
 It was developed for the paper [*Representing Edge Flows on Graphs via Sparse Cell Complexes*](https://arxiv.org/abs/2309.01632).
-You can find the evaluation workflow and a usage example using Jupyter [here](https://github.com/josefhoppe/edge-flow-cell-complexes).
+You can find the evaluation workflow [here](https://github.com/josefhoppe/edge-flow-cell-complexes).
 Install it using:
 
 ```
