@@ -4,6 +4,7 @@ authors:
 - family-names: "Hoppe"
   given-names: "Josef"
   orcid: "https://orcid.org/0000-0003-4383-7049"
+  affiliation: "RWTH Aachen University"
 title: "cell-flower"
 version: 0.1.1
 date-released: 2023-10-26
