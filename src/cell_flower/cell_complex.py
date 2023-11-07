@@ -264,9 +264,7 @@ class CellComplex():
         return self.cell_order_map[k]
 
     def boundary_map(self, k: int = 1) -> np.ndarray | csc_array:
-        """
-        The boundary map $B_k$. Sparse for $k \in {1,2}$.
-        """
+        """The boundary map $B_k$. Sparse for $k \in {1,2}$."""
         if k == 1:
             return self.__edge_boundary_map
         if k == 2:
