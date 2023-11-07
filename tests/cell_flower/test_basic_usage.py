@@ -37,6 +37,6 @@ def test_basic_run():
 
 def test_nx_compatibility():
     G = nx.karate_club_graph()
-    CC = cf.nx_graph_to_cc(G)
+    CC, _, _ = cf.nx_graph_to_cc(G)
     G2 = cf.cc_to_nx_graph(CC)
     assert nx.is_isomorphic(G, G2)
