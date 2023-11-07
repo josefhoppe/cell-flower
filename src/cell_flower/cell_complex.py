@@ -1,5 +1,6 @@
 from itertools import combinations
-from typing import DefaultDict, Any, SupportsRichComparison, Literal, Callable
+from typing import DefaultDict, Any, Literal, Callable
+from _typeshed import SupportsRichComparison
 
 import numpy as np
 from scipy.sparse import csc_array, lil_array, hstack
