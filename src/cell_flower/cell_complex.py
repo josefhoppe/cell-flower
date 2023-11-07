@@ -1,6 +1,5 @@
 from itertools import combinations
 from typing import DefaultDict, Any, Literal, Callable
-from _typeshed import SupportsRichComparison
 
 import numpy as np
 from scipy.sparse import csc_array, lil_array, hstack
@@ -52,7 +51,7 @@ def index_to_cell(cell: tuple, node_list: list[Any]) -> tuple:
     """
     return tuple([node_list[i] for i in cell])
 
-def map_cells_to_index(cells: list[tuple], sort_key: Literal[None] | Callable[[Any], SupportsRichComparison] = None) -> tuple[int, list[tuple], list[Any], dict[Any,int]]:
+def map_cells_to_index(cells: list[tuple], sort_key: Literal[None] | Callable[[Any], Any] = None) -> tuple[int, list[tuple], list[Any], dict[Any,int]]:
     """Maps the given cell tuples to int tuples and a dictionary for reverse mapping
 
     Usage:
@@ -68,7 +67,7 @@ def map_cells_to_index(cells: list[tuple], sort_key: Literal[None] | Callable[[A
 
     Parameters:
     - `cells`: List of all cells (as tuples of any type). May include 0-cells as tuples of length 1.
-    - `sort_key`: Sort key used to sort nodes according to the `key` of `sorted()`. Will still sort comparable types if
+    - `sort_key`: Sort key used to sort nodes by passing it as the `key` parameter to `sorted()`. If `None`, comparable types will still be sorted.
     
     Returns: number of nodes, list of 1-cells and 2-cells as tuples, ordered list of nodes, dictionary to map nodes to int representation
     """
