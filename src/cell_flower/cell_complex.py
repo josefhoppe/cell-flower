@@ -1,13 +1,9 @@
-from abc import ABC, abstractmethod
-from itertools import chain, combinations
-from typing import DefaultDict, Dict, Iterable, List, Set, Tuple
+from itertools import combinations
+from typing import Defaultdict, Any, SupportsRichComparison, Literal, Callable
 
 import numpy as np
 import numpy.linalg as linalg
 from scipy.sparse import csc_array, lil_array, hstack
-from scipy.sparse.linalg import lsmr
-
-from .matrix_utils import neg_part, normalize, pos_part
 
 def normalize_cell(cell: tuple) -> tuple:
     """
@@ -28,7 +24,7 @@ def normalize_cell(cell: tuple) -> tuple:
         shifted = shifted[-1:] + shifted[:-1]
     return shifted
 
-def calc_edges(cell: tuple) -> List[tuple]:
+def calc_edges(cell: tuple) -> list[tuple]:
     """
     Calculates all edges as 2-tuples of nodes from a 2-dim cell
     """
@@ -38,22 +34,74 @@ def calc_edges(cell: tuple) -> List[tuple]:
         res.append(normalize_cell((node, cell[j])))
     return res
 
+def cell_to_index(cell: tuple, node_index_map: dict[Any, int]) -> tuple:
+    """Maps the given cell tuple to an int tuple according to the node index map.
+
+    Usage: see `map_cells_to_index`.
+    
+    Returns: tuple of ints representing the cell.
+    """
+    return normalize_cell(tuple([node_index_map[n] for n in cell]))
+
+def index_to_cell(cell: tuple, node_list: list[Any]) -> tuple:
+    """Maps the given index tuple to a cell tuple according to the node list.
+
+    Usage: see `map_cells_to_index`.
+    
+    Returns: tuple of original objects representing the cell.
+    """
+    return tuple([node_list[i] for i in cell])
+
+def map_cells_to_index(cells: list[tuple], sort_key: Literal[None] | Callable[[Any], SupportsRichComparison] = None) -> tuple[int, list[tuple], list[Any], dict[Any,int]]:
+    """Maps the given cell tuples to int tuples and a dictionary for reverse mapping
+
+    Usage:
+
+    ```python
+    import cell_flower as cf
+    cells = [('A', 'B'), ('B','C','D')]
+    node_count, cells, node_list, node_index_map = cf.map_cells_to_int(cells)
+    CC = cf.CellComplex(node_count, cells)
+    print(cf.index_to_cell((0,1,2), node_list)) # ('A', 'B', 'C') [ordered like `normalize_cell` for usage in CC]
+    print(cf.cell_to_index(('A', 'B', 'C'), node_list)) # (0, 1, 2) [ordered as given for external usage]
+    ```
+
+    Parameters:
+    - `cells`: List of all cells (as tuples of any type). May include 0-cells as tuples of length 1.
+    - `sort_key`: Sort key used to sort nodes according to the `key` of `sorted()`. Will still sort comparable types if
+    
+    Returns: number of nodes, list of 1-cells and 2-cells as tuples, ordered list of nodes, dictionary to map nodes to int representation
+    """
+    node_list = list(set().union(*cells))
+    if sort_key != None:
+        node_list = sorted(node_list, key=sort_key)
+    else:
+        try:
+            node_list = sorted(node_list)
+        except:
+            pass
+    node_index_map = {
+        node: idx for node, idx in enumerate(node_list)
+    }
+    index_cells = [ cell_to_index(cell, node_index_map) for cell in cells if len(cell) > 1 ]
+    return len(node_list), index_cells, node_list, node_index_map
+
 class CellComplex():
     """
     Implementation of a cell complex
 
     Only supports cells of dimension 0, 1, or 2 (i.e., nodes, edges, polygons)
     """
-    cell_order_map: Dict[int, List[Tuple[int]]]
-    __cell_index: Dict[Tuple[int], int]
+    cell_order_map: dict[int, list[tuple[int]]]
+    __cell_index: dict[tuple[int], int]
     embedding = None
     __cell_boundary_map: csc_array
     __edge_boundary_map: csc_array
-    __node_incidences: Dict[int, Dict[int, int]]
-    __triangles: np.ndarray[Tuple[tuple,csc_array]] | None = None
+    __node_incidences: dict[int, dict[int, int]]
+    __triangles: np.ndarray[tuple[tuple,csc_array]] | None = None
 
     @property
-    def triangles(self) -> np.ndarray[Tuple[tuple,csc_array]]:
+    def triangles(self) -> np.ndarray[tuple[tuple,csc_array]]:
         """
         All triangles in the complex.
         """
@@ -84,8 +132,8 @@ class CellComplex():
         Note: Currently, only the 1-skeleton is implemented efficiently.
         """
         if order == 1:
-            cell_order_map = DefaultDict(list)
-            cell_index = DefaultDict(lambda: {})
+            cell_order_map = Defaultdict(list)
+            cell_index = Defaultdict(lambda: {})
             for i in range(order + 1):
                 cell_order_map[i] += self.cell_order_map[i]
                 cell_index[i] = self.__cell_index[i].copy()
@@ -108,10 +156,10 @@ class CellComplex():
         Note: the implementation is currently not very efficient, use `add_cell_fast` to add 2-cells efficiently.
         """
         cells = []
-        for i in range(3):
+        for i in range(1,3):
             cells += self.cell_order_map[i]
         cells += [cell]
-        return CellComplex(cells)
+        return CellComplex(len(self.cell_order_map[0]), cells)
     
     def add_cell_fast(self, cell:tuple, cell_boundary: csc_array) -> "CellComplex":
         """
@@ -121,57 +169,64 @@ class CellComplex():
         """
         if len(cell) < 3:
             raise NotImplementedError('Can only add 2-cells')
-        cell_order_map = DefaultDict(list)
-        cell_index = DefaultDict(lambda: {})
+        cell_order_map = Defaultdict(list)
+        cell_index = Defaultdict(lambda: {})
         for i in range(3):
             cell_order_map[i] += self.cell_order_map[i]
             cell_index[i] = self.__cell_index[i].copy()
         cell_order_map[2].append(cell)
         cell_index[2][cell] = len(cell_order_map[2]) - 1
-        new_compl = CellComplex(None, cell_order_map=cell_order_map, 
+        new_compl = CellComplex(-1, [], cell_order_map=cell_order_map, 
                 cell_boundary_map=hstack((self.__cell_boundary_map, cell_boundary)),
                 edge_boundary_map=self.__edge_boundary_map, node_incidences=self.__node_incidences, cell_index=cell_index)
         if self.__triangles is not None:
             new_compl.__triangles = self.__triangles
         return new_compl
 
-    def __init__(self, cells: List[Tuple[int]] | None, **kwargs):
+    def __init__(self, node_count: int, cells: list[tuple[int]], **kwargs):
         """
-        Initializes a new Cell complex, either by calculating everything (if cells != None) or by taking all properties from **kwargs
+        Initializes a new Cell complex, either by calculating everything (if node_count != -1) or by taking all properties from **kwargs
         """
-        if cells is None:
-            # 'manual' initialization
+        if node_count == -1:
+            # 'manual' initialization (see also: add_cell_fast)
             self.cell_order_map = kwargs['cell_order_map']
             self.__cell_boundary_map = kwargs['cell_boundary_map']
             self.__edge_boundary_map = kwargs['edge_boundary_map']
             self.__node_incidences = kwargs['node_incidences']
             self.__cell_index = kwargs['cell_index']
             return
-        self.cell_order_map = DefaultDict(list)
-        self.__cell_index = DefaultDict(lambda: {})
+        self.cell_order_map = Defaultdict(list)
+        self.__cell_index = Defaultdict(lambda: {})
 
         def add_cell(order, cell):
             if not cell in self.__cell_index[order]:
                 self.cell_order_map[order].append(cell)
                 self.__cell_index[order][cell] = len(self.cell_order_map[order]) - 1
+        
+        def assert_cell(order, cell):
+            if not cell in self.__cell_index[order]:
+                raise RuntimeError(f"Unknown but required cell {cell}. Please use `cf.map_cells_to_index()`.")
+
+        for node in range(node_count):
+            # TODO: Refactor to replace 0-cells with node_count attribute?
+            add_cell(0, (node,))
 
         for cell in cells:
             if len(cell) == 1:
-                add_cell(0, cell)
+                assert_cell(0, cell)
             elif len(cell) == 2:
-                add_cell(0, (cell[0],))
-                add_cell(0, (cell[1],))
+                assert_cell(0, (cell[0],))
+                assert_cell(0, (cell[1],))
                 add_cell(1, cell)
             else:
                 norm_cell = normalize_cell(cell)
                 add_cell(2, norm_cell)
                 for point in norm_cell:
-                    add_cell(0, (point,))
+                    assert_cell(0, (point,))
                 for edge in calc_edges(norm_cell):
                     add_cell(1, edge)
         
         # calculate cell boundaries
-        node_count = len(self.get_cells(0))
         edge_count = len(self.get_cells(1))
         cell_count = len(self.get_cells(2))
         cell_boundary = lil_array((edge_count, cell_count), dtype=np.int32)
@@ -203,7 +258,7 @@ class CellComplex():
             cell_boundary[lower_idx, 0] = orientation
         return csc_array(cell_boundary)
 
-    def get_cells(self, k: int = 1) -> List:
+    def get_cells(self, k: int = 1) -> list:
         """
         returns the cells $C_k$ of the given dimension `k`.
         """
@@ -221,13 +276,13 @@ class CellComplex():
             return np.zeros(shape=(0,len(self.get_cells(k))), dtype=np.int32)
         raise NotImplementedError('Only cells up to dimension 2 (nodes, edges, polygons) are supported.')
     
-    def node_incidences(self) -> Dict[int, Set[Tuple[int, int]]]:
+    def node_incidences(self) -> dict[int, set[tuple[int, int]]]:
         """
-        Dictionary `node` -> `edge`; edges are represented as tuples of nodes
+        dictionary `node` -> `edge`; edges are represented as tuples of nodes
         """
         return self.__node_incidences
     
-    def __node_incidences(self) -> Dict[int, Set[Tuple[int, int]]]:
+    def __node_incidences(self) -> dict[int, set[tuple[int, int]]]:
         """
         For all nodes, get all adjacent nodes and the index of the connecting edge.
         ```
@@ -236,7 +291,7 @@ class CellComplex():
                     ↑ other node (as number / name)
         ```
         """
-        res = DefaultDict(set)
+        res = Defaultdict(set)
         edge_count = len(self.get_cells(1))
         for idx, (a, b) in enumerate(self.get_cells(1)):
             res[a].add((b, idx))
@@ -258,7 +313,7 @@ def cc_to_nx_graph(CC: CellComplex):
 
 def nx_graph_to_cc(G) -> CellComplex:
     """
-    Converts the networkx Graph to a Cell Complex
+    Converts the networkx Graph to a Cell Complex.
     """
     cells = [(node, ) for node in G.nodes] + [e for e in G.edges]
     return CellComplex(cells)
