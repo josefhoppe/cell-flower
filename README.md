@@ -24,12 +24,12 @@ import cell_flower as cf
 import networkx as nx
 
 G = ... # nx.Graph
-CC = cf.nx_graph_to_cc(G)
+CC, node_list, node_index_map = cf.nx_graph_to_cc(G) # converts nodes in G to int and also returns the mapping
 flows = ... # np.ndarray, shape (samples, edges)
 
 CC_prime = cf.cell_inference_approximation(CC, flows, 2, 2, n_clusters=5)
-# Check to see the cells that were recovered
-CC_prime.get_cells(2)
+# Check to see the cells that were recovered; map back to node labels
+[ cf.index_to_cell(cell, node_list) for cell in CC_prime.get_cells(2) ]
 ```
 
 If you use Cell FLOWer, please cite the following paper:

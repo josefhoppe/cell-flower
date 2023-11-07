@@ -1,8 +1,7 @@
 from itertools import combinations
-from typing import Defaultdict, Any, SupportsRichComparison, Literal, Callable
+from typing import DefaultDict, Any, SupportsRichComparison, Literal, Callable
 
 import numpy as np
-import numpy.linalg as linalg
 from scipy.sparse import csc_array, lil_array, hstack
 
 def normalize_cell(cell: tuple) -> tuple:
@@ -132,8 +131,8 @@ class CellComplex():
         Note: Currently, only the 1-skeleton is implemented efficiently.
         """
         if order == 1:
-            cell_order_map = Defaultdict(list)
-            cell_index = Defaultdict(lambda: {})
+            cell_order_map = DefaultDict(list)
+            cell_index = DefaultDict(lambda: {})
             for i in range(order + 1):
                 cell_order_map[i] += self.cell_order_map[i]
                 cell_index[i] = self.__cell_index[i].copy()
@@ -169,8 +168,8 @@ class CellComplex():
         """
         if len(cell) < 3:
             raise NotImplementedError('Can only add 2-cells')
-        cell_order_map = Defaultdict(list)
-        cell_index = Defaultdict(lambda: {})
+        cell_order_map = DefaultDict(list)
+        cell_index = DefaultDict(lambda: {})
         for i in range(3):
             cell_order_map[i] += self.cell_order_map[i]
             cell_index[i] = self.__cell_index[i].copy()
@@ -195,8 +194,8 @@ class CellComplex():
             self.__node_incidences = kwargs['node_incidences']
             self.__cell_index = kwargs['cell_index']
             return
-        self.cell_order_map = Defaultdict(list)
-        self.__cell_index = Defaultdict(lambda: {})
+        self.cell_order_map = DefaultDict(list)
+        self.__cell_index = DefaultDict(lambda: {})
 
         def add_cell(order, cell):
             if not cell in self.__cell_index[order]:
@@ -291,7 +290,7 @@ class CellComplex():
                     ↑ other node (as number / name)
         ```
         """
-        res = Defaultdict(set)
+        res = DefaultDict(set)
         edge_count = len(self.get_cells(1))
         for idx, (a, b) in enumerate(self.get_cells(1)):
             res[a].add((b, idx))
@@ -311,9 +310,15 @@ def cc_to_nx_graph(CC: CellComplex):
     G.add_edges_from(CC.get_cells(1))
     return G
 
-def nx_graph_to_cc(G) -> CellComplex:
+def nx_graph_to_cc(G) -> tuple[CellComplex, list[Any], dict[Any,int]]:
     """
     Converts the networkx Graph to a Cell Complex.
+
+    Always index-converts the given nodes using `map_cells_to_index`, consult that function for more info.
+    Also returns the node list and node index map from `map_cells_to_index`.
+
+    Returns: Tuple (cell complex, ordered list of nodes, dictionary to map nodes to int representation)
     """
     cells = [(node, ) for node in G.nodes] + [e for e in G.edges]
-    return CellComplex(cells)
+    node_count, idx_cells, node_list, node_index_map = map_cells_to_index(cells)
+    return CellComplex(node_count, idx_cells), node_list, node_index_map

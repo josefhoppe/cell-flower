@@ -5,7 +5,7 @@ import networkx as nx
 
 def test_basic_run():
     # Initialize underlying graph
-    CC = cf.CellComplex([(0,1), (1,2), (2,3), (0,3), (3,4), (0,4)])
+    CC = cf.CellComplex(5, [(0,1), (1,2), (2,3), (0,3), (3,4), (0,4)])
 
     # Cell boundary maps expressed as pd.Series
     # Cell (0,1,2,3)
