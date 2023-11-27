@@ -2,6 +2,7 @@
 
 <img align="right" width="200" style="margin-top:-5px" src="https://raw.githubusercontent.com/josefhoppe/cell-flower/main/readme_src/LOGO_ERC-FLAG_FP.png">
 
+[![Published at Learning on Graphs Conference 2023](https://img.shields.io/badge/Published_at-LoG_2023-003380.svg)](https://openreview.net/forum?id=qix189lq5D)
 [![arXiv:2309.01632](https://img.shields.io/badge/arXiv-2309.01632-b31b1b.svg?logo=arxiv)](https://arxiv.org/abs/2309.01632)
 [![MIT license](https://img.shields.io/badge/License-MIT-blue.svg)](https://github.com/josefhoppe/cell-flower/blob/main/LICENSE)
 ![Python version](https://img.shields.io/python/required-version-toml?tomlFilePath=https%3A%2F%2Fraw.githubusercontent.com%2Fjosefhoppe%2Fcell-flower%2Fmain%2Fpyproject.toml&logo=python&logoColor=ffd242)
