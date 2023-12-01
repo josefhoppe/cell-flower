@@ -37,13 +37,13 @@ CC_prime = cf.cell_inference_approximation(CC, flows, 2, 2, n_clusters=5)
 If you use Cell FLOWer, please cite the following paper:
 
 ```
-@misc{hoppe2023representing,
-      title={Representing Edge Flows on Graphs via Sparse Cell Complexes}, 
-      author={Josef Hoppe and Michael T. Schaub},
+@inproceedings{
+      hoppe2023representing,
+      title={Representing Edge Flows on Graphs via Sparse Cell Complexes},
+      author={Josef Hoppe and Michael T Schaub},
+      booktitle={The Second Learning on Graphs Conference},
       year={2023},
-      eprint={2309.01632},
-      archivePrefix={arXiv},
-      primaryClass={cs.SI}
+      url={https://openreview.net/forum?id=qix189lq5D}
 }
 ```
 
