@@ -138,7 +138,7 @@ class CellComplex():
                 cell_index[i] = self.__cell_index[i].copy()
 
             empty_boundaries = csc_array((len(self.get_cells(1)), 0), dtype=np.int32)
-            return CellComplex(None, cell_order_map=cell_order_map, 
+            return CellComplex(-1, [], cell_order_map=cell_order_map, 
                     cell_boundary_map=empty_boundaries, node_incidences=self.__node_incidences,
                     edge_boundary_map=self.__edge_boundary_map, cell_index=cell_index)
         # very slow
