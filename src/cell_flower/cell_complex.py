@@ -80,7 +80,7 @@ def map_cells_to_index(cells: list[tuple], sort_key: Literal[None] | Callable[[A
         except:
             pass
     node_index_map = {
-        node: idx for node, idx in enumerate(node_list)
+        node: idx for idx, node in enumerate(node_list)
     }
     index_cells = [ cell_to_index(cell, node_index_map) for cell in cells if len(cell) > 1 ]
     return len(node_list), index_cells, node_list, node_index_map
