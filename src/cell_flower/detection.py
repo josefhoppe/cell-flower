@@ -296,7 +296,7 @@ def cell_inference_approximation(CC: CellComplex, flows: np.ndarray, n_candidate
             harmonic_flows[j] -= project_flow(
                 current_compl.boundary_map(2), no_gradient_flows[[j]])
         
-        approx_error = np.sum(np.square(harmonic_flows))
+        approx_error = np.sqrt(np.sum(np.square(harmonic_flows)))
         cells_added += 1
 
     return current_compl
