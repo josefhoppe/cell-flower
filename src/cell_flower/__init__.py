@@ -5,4 +5,4 @@ Cell FLOWer. Implements algorithms and requirements from [1].
 """
 
 from .cell_complex import CellComplex, normalize_cell, nx_graph_to_cc, cc_to_nx_graph, map_cells_to_index, cell_to_index, index_to_cell
-from .detection import CellCandidateHeuristic, CellSearchFlowNormalization, cell_inference_approximation
+from .detection import CellCandidateHeuristic, CellSearchFlowNormalization, CellCandidateScoring, cell_inference_approximation

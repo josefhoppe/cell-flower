@@ -9,7 +9,8 @@ from sklearn.metrics import pairwise_distances
 from sklearn.cluster import KMeans
 from scipy.sparse.linalg import lsmr
 from scipy.sparse import lil_array, hstack, csc_array
-from enum import Enum
+from enum import EnumMeta, Enum
+from warnings import warn
 from queue import Queue
 from .cell_complex import CellComplex, normalize_cell
 from .spanning_trees import *
@@ -92,29 +93,64 @@ class CellCandidateHeuristic(Enum):
     SIMILARITY = 4
     TRIANGLES = 5
 
+class DeprecatedEnumMeta(EnumMeta):
+    def __getattribute__(self, item):
+        warn('The Enum CellSearchFlowNormalization is deprecated in favor of CellCandidateScoring.', DeprecationWarning, stacklevel=2)
+        return EnumMeta.__getattribute__(self, item)
 
-class CellSearchFlowNormalization(Enum):
+class CellSearchFlowNormalization(Enum, metaclass=DeprecatedEnumMeta):
     """
+    **Deprecated. Use `CellCandidateScoring` instead.**
+
     How to normalize the integrated cell flows (score = integrated flow / normalization)
 
-    NONE: Don't normalize (i.e., take complete integrated flow)
-    LEN: Length of the cell. Efficiently implemented, does not increase asymptotic complexity.
+    NONE: Don't normalize (i.e., take complete integrated flow) **Deprecated. Use `CellCandidateScoring.SUM` instead.**
+    LEN: Length of the cell. Efficiently implemented, does not increase asymptotic complexity. **Deprecated. Use `CellCandidateScoring.MEAN` instead.**
     """
     NONE = 1
     LEN = 2
 
+class CellCandidateScoring(Enum):
+    """
+    How to score cell candidates based on the flows around their edges.
+
+    MEAN and HARM are both efficiently implemented, and do not increase asymptotic complexity.
+
+    SUM favors longer cells, HARM should be close to optimal length, MEAN favors shorter cells.
+
+    SUM: score = (directed) sum of the edge flows
+    MEAN: score = (directed) sum of the edge flows / length 
+    HARM: score = (2*length - 1) * mean^2. Approximates the reduction in harmonic flow.
+    """
+    SUM = 1
+    MEAN = 2
+    HARM = 3
+
 
 def find_max_cycles(cell_compl: CellComplex, spanning_tree: FlowPotentialSpanningTree, flows: np.ndarray,
                     edges: List[Tuple[int, int, int]],
-                    flow_norm: CellSearchFlowNormalization = CellSearchFlowNormalization.LEN,
-                    cycle_flows_heap: list | None = None) -> List[Tuple[float, FlowPotentialSpanningTree, int, int, int]]:
+                    scoring: CellCandidateScoring = CellCandidateScoring.HARM,
+                    cycle_flows_heap: list | None = None,
+                    flow_norm: CellSearchFlowNormalization | None = None) -> List[Tuple[float, FlowPotentialSpanningTree, int, int, int]]:
     """
-    Checks all cycles induced by `edges` on `spanning_tree` and calculates the total flow (w.r.t `flow_norm`)
+    Checks all cycles induced by `edges` on `spanning_tree` and calculates the total flow (w.r.t `scoring`)
 
     returns a heap of tuples (-normalized_flow, edge_idx, node_a, node_b)  
     Note that the implementation of `heapq` is a min-heap, therefore the negative of the flow is added.  
     However, typically, the flow is only required to `heappop`.
     """
+    # check for deprecated enum CellSearchFlowNormalization, show deprecation warning, and substitute for compatibility.
+    flow_norm_map = {
+        CellSearchFlowNormalization.NONE: CellCandidateScoring.SUM,
+        CellSearchFlowNormalization.LEN: CellCandidateScoring.MEAN
+    }
+    if type(flow_norm) is CellSearchFlowNormalization:
+        warn(f'The argument `flow_norm` and the Enum `CellSearchFlowNormalization` are deprecated. Use `scoring` and the Enum `CellCandidateScoring` instead. Replacing {flow_norm} with {flow_norm_map[flow_norm]} for now.', DeprecationWarning, stacklevel=2)
+        scoring = flow_norm_map[flow_norm]
+    if type(scoring) is CellSearchFlowNormalization:
+        warn(f'The Enum `CellSearchFlowNormalization` is deprecated. Use the Enum `CellCandidateScoring` instead. Replacing {scoring} with {flow_norm_map[scoring]} for now.', DeprecationWarning, stacklevel=2)
+        scoring = flow_norm_map[scoring]
+
     if cycle_flows_heap is None:
         cycle_flows_heap = []
     # empty or already a heap, so not necessary: heapify(cycle_flows_heap)
@@ -126,16 +162,22 @@ def find_max_cycles(cell_compl: CellComplex, spanning_tree: FlowPotentialSpannin
     # edge -> least common ancestor
     lca: Dict[Tuple[int, int], int]
 
-    if flow_norm == CellSearchFlowNormalization.LEN:
+    if scoring != CellCandidateScoring.SUM:
         # O(nodes + edges) operation, so only perform if necessary
         lca = spanning_tree.least_common_ancestor([edge[1:] for edge in edges])
 
     def add_cycle(edge: int, node: int, other: int, edge_flows: np.ndarray):
-        total_flow = np.sum(
+        score = np.sum(
             np.abs(node_potential[node] - edge_flows - node_potential[other]))
-        if flow_norm == CellSearchFlowNormalization.LEN:
-            total_flow /= node_level[node] + node_level[other] + 1 - 2 * node_level[lca[(node, other)]]
-        heappush(cycle_flows_heap, (-total_flow, spanning_tree, edge, node, other))
+        if scoring == CellCandidateScoring.MEAN or scoring == CellCandidateScoring.HARM:
+            length = node_level[node] + node_level[other] + 1 - 2 * node_level[lca[(node, other)]]
+            score /= length
+            if scoring == CellCandidateScoring.HARM:
+                # Expected error reduction is approx. (2l - 1)\mu^2
+                mu_sq = np.sum(np.square(node_potential[node] - edge_flows - node_potential[other])) / length / length
+                score = (2 * length - 1) * mu_sq
+
+        heappush(cycle_flows_heap, (-score, spanning_tree, edge, node, other))
 
     for edge, node, other in edges:
         edge_flows = flows[:, edge % edge_count] * (-1) ** (edge // edge_count)
@@ -163,7 +205,7 @@ def __finalize_candidates(cell_compl: CellComplex, heap: list[tuple[float, FlowP
     return result
 
 def cell_candidate_search_st(rnd: np.random.Generator, cell_compl: CellComplex, result_count: int, flows: np.ndarray, method: CellCandidateHeuristic = CellCandidateHeuristic.SIMILARITY,
-                            n_clusters = 11, flow_norm: CellSearchFlowNormalization = CellSearchFlowNormalization.NONE) -> List[Tuple[tuple, csc_array, FlowPotentialSpanningTree]]:
+                            n_clusters = 11, scoring: CellCandidateScoring = CellCandidateScoring.HARM, flow_norm: CellSearchFlowNormalization | None = None) -> List[Tuple[tuple, csc_array, FlowPotentialSpanningTree]]:
     """
     Searches for Cell candidates using spanning trees.
     The concrete implementation depends on `method`:
@@ -176,7 +218,7 @@ def cell_candidate_search_st(rnd: np.random.Generator, cell_compl: CellComplex, 
     if method == CellCandidateHeuristic.MAX:
         spanning_tree, edges = max_spanning_tree(cell_compl, flows)
 
-        max_cycle_heap = find_max_cycles(cell_compl, spanning_tree, flows, edges, flow_norm)
+        max_cycle_heap = find_max_cycles(cell_compl, spanning_tree, flows, edges, scoring, flow_norm=flow_norm)
     elif method == CellCandidateHeuristic.SIMILARITY:
         # since the orientation of edges is arbitrary, we need to cluster both with and opposite the orientation
         embed = np.concatenate((flows, -flows), axis=1).T
@@ -187,7 +229,7 @@ def cell_candidate_search_st(rnd: np.random.Generator, cell_compl: CellComplex, 
         for idx, similarity in enumerate(dist_center_edges):
             spanning_tree, edges = max_spanning_tree(cell_compl, flows, -1 * similarity, st_id = idx)
 
-            find_max_cycles(cell_compl, spanning_tree, flows, edges, flow_norm, max_cycle_heap)
+            find_max_cycles(cell_compl, spanning_tree, flows, edges, scoring, max_cycle_heap, flow_norm=flow_norm)
     else:
         incidences = cell_compl.node_incidences()
         nodes = np.fromiter(incidences.keys(), dtype=int)
@@ -200,7 +242,7 @@ def cell_candidate_search_st(rnd: np.random.Generator, cell_compl: CellComplex, 
             else: # CellCandidateHeuristic.DFS
                 spanning_tree, edges = dfs_spanning_tree(rnd, incidences, edge_count, root_node, flows)
 
-            find_max_cycles(cell_compl, spanning_tree, flows, edges, flow_norm, max_cycle_heap)
+            find_max_cycles(cell_compl, spanning_tree, flows, edges, scoring, max_cycle_heap, flow_norm=flow_norm)
     return __finalize_candidates(cell_compl, max_cycle_heap, result_count)
 
 def cell_candidate_search_triangles(cell_compl: CellComplex, result_count: int, flows: np.ndarray) -> List[Tuple[tuple, csc_array, FlowPotentialSpanningTree]]:
@@ -213,8 +255,8 @@ def cell_candidate_search_triangles(cell_compl: CellComplex, result_count: int, 
 
 def cell_inference_approximation(CC: CellComplex, flows: np.ndarray, n_candidates: int,
                                  n: int | None = None, epsilon: float | None = None, heuristic: CellCandidateHeuristic = CellCandidateHeuristic.SIMILARITY,
-                                 n_clusters: int = 11, flow_norm = CellSearchFlowNormalization.LEN,
-                                 seed: np.random.Generator | int | None = None) -> CellComplex:
+                                 n_clusters: int = 11, scoring: CellCandidateScoring = CellCandidateScoring.HARM,
+                                 seed: np.random.Generator | int | None = None, flow_norm: CellSearchFlowNormalization | None = None) -> CellComplex:
     """
     Runs the inference and approximation algorithm from [1] and returns both the inferred flows and the resulting CellComplex.
 
@@ -227,8 +269,9 @@ def cell_inference_approximation(CC: CellComplex, flows: np.ndarray, n_candidate
     - `epsilon`: Approximation error to reach before stopping. Optional, see for termination condition below.
     - `heuristic`: The cell inference heuristic. Optional, default: `CellCandidateHeuristic.SIMILARITY`
     - `n_clusters`: Number of clusters for `heuristic=CellCandidateHeuristic.SIMILARITY`. Otherwise ignored. Intuitively, it can be t to 1 + 2 * (Number of cells to distinguish in each step) Optional, default: `11`.
-    - `flow_norm`: How to normalize cell flows for comparison. See CellSearchFlowNormalization. Optional, default `CellSearchFlowNormalization.LEN`.
+    - `scoring`: How to score cell candidates based on their flows. See `CellCandidateScoring`. Optional, default `CellCandidateScoring.HARM`.
     - `seed`: Seed for reproducible Randomness. Can be a `np.random.Generator`, `int` (used to seed a Generator). Optional, `np.random.default_rng()` if not provided.
+    - `flow_norm`: Deprecated. Use `scoring` instead.
 
     Returns: The cell complex obtained by adding the mentioned cells.
 
